@@ -15,6 +15,7 @@ import {
   CreditCard,
   Webhook,
   FileText,
+  Upload,
 } from "lucide-react";
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -33,6 +34,14 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -107,46 +116,127 @@ export default function SettingsPage() {
 
 function ProfileTab() {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Profile Details</CardTitle>
-        <CardDescription>
-          Update your personal information and profile settings.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-center gap-4">
-          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted text-lg font-medium">
-            JD
-          </div>
-          <Button variant="outline" size="sm">
-            Change Avatar
-          </Button>
-        </div>
-        <Separator />
-        <div className="grid gap-4 sm:grid-cols-2">
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Personal Info</CardTitle>
+          <CardDescription>
+            Update your photo and personal details here.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
           <div className="space-y-2">
-            <Label htmlFor="first-name">First Name</Label>
-            <Input id="first-name" placeholder="John" />
+            <Label>Profile Image</Label>
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-medium">
+                JD
+              </div>
+              <div className="flex flex-1 cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-6 transition-colors hover:border-primary/50 hover:bg-muted/50">
+                <Upload className="mb-2 h-6 w-6 text-muted-foreground" />
+                <p className="text-sm font-medium">
+                  Click to upload or drag and drop
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  SVG, PNG, JPG or GIF (max. 800x400px)
+                </p>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground">
+              This will be displayed on your profile.
+            </p>
+          </div>
+          <Separator />
+          <div className="space-y-2">
+            <Label htmlFor="company-name">Company Name</Label>
+            <Input id="company-name" placeholder="Acme Inc." />
           </div>
           <div className="space-y-2">
-            <Label htmlFor="last-name">Last Name</Label>
-            <Input id="last-name" placeholder="Doe" />
+            <Label htmlFor="email">Email Address</Label>
+            <Input
+              id="email"
+              type="email"
+              defaultValue="john@example.com"
+              disabled
+            />
           </div>
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="email">Email</Label>
-          <Input id="email" type="email" placeholder="john@example.com" />
-        </div>
-        <div className="space-y-2">
-          <Label htmlFor="phone">Phone Number</Label>
-          <Input id="phone" type="tel" placeholder="+1 (555) 000-0000" />
-        </div>
-      </CardContent>
-      <CardFooter>
+          <div className="space-y-2">
+            <Label htmlFor="role">Role</Label>
+            <Select disabled defaultValue="admin">
+              <SelectTrigger id="role" className="w-full">
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="admin">Admin</SelectItem>
+                <SelectItem value="member">Member</SelectItem>
+                <SelectItem value="viewer">Viewer</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Location & Settings</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="country">Country</Label>
+            <Select>
+              <SelectTrigger id="country" className="w-full">
+                <SelectValue placeholder="Select country" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="us">United States</SelectItem>
+                <SelectItem value="gb">United Kingdom</SelectItem>
+                <SelectItem value="ca">Canada</SelectItem>
+                <SelectItem value="au">Australia</SelectItem>
+                <SelectItem value="de">Germany</SelectItem>
+                <SelectItem value="fr">France</SelectItem>
+                <SelectItem value="jp">Japan</SelectItem>
+                <SelectItem value="br">Brazil</SelectItem>
+                <SelectItem value="in">India</SelectItem>
+                <SelectItem value="ae">United Arab Emirates</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="timezone">Timezone</Label>
+            <Select>
+              <SelectTrigger id="timezone" className="w-full">
+                <SelectValue placeholder="Select timezone" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="utc-12">(UTC-12:00) Baker Island</SelectItem>
+                <SelectItem value="utc-8">(UTC-08:00) Pacific Time</SelectItem>
+                <SelectItem value="utc-7">(UTC-07:00) Mountain Time</SelectItem>
+                <SelectItem value="utc-6">(UTC-06:00) Central Time</SelectItem>
+                <SelectItem value="utc-5">(UTC-05:00) Eastern Time</SelectItem>
+                <SelectItem value="utc-0">(UTC+00:00) London, Dublin</SelectItem>
+                <SelectItem value="utc+1">(UTC+01:00) Berlin, Paris</SelectItem>
+                <SelectItem value="utc+3">(UTC+03:00) Moscow, Riyadh</SelectItem>
+                <SelectItem value="utc+4">(UTC+04:00) Dubai, Baku</SelectItem>
+                <SelectItem value="utc+5.5">(UTC+05:30) Mumbai, Kolkata</SelectItem>
+                <SelectItem value="utc+8">(UTC+08:00) Singapore, Beijing</SelectItem>
+                <SelectItem value="utc+9">(UTC+09:00) Tokyo, Seoul</SelectItem>
+                <SelectItem value="utc+10">(UTC+10:00) Sydney, Melbourne</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <Separator />
+          <div className="flex items-center gap-2">
+            <Checkbox id="newsletter" />
+            <Label htmlFor="newsletter" className="font-normal">
+              Subscribe to newsletter
+            </Label>
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="flex justify-end">
         <Button>Save Changes</Button>
-      </CardFooter>
-    </Card>
+      </div>
+    </div>
   );
 }
 
