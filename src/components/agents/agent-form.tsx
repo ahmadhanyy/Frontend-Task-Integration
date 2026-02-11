@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useEffect } from "react";
+import { toast } from "react-hot-toast";
 import {
   ChevronDown,
   Upload,
@@ -45,11 +46,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-interface UploadedFile {
-  name: string;
-  size: number;
-  file: File;
-}
+import { useReferenceData } from '@/hooks/useReferenceData';
+import { useFileUpload } from '@/hooks/useFileUpload';
+import { useAgentForm } from '@/hooks/useAgentForm';
 
 function formatFileSize(bytes: number): string {
   if (bytes < 1024) return bytes + " B";
@@ -130,36 +129,71 @@ interface AgentFormProps {
 }
 
 export function AgentForm({ mode, initialData }: AgentFormProps) {
-  // Form state — initialized from initialData when provided
-  const [agentName, setAgentName] = useState(initialData?.agentName ?? "");
-  const [callType, setCallType] = useState(initialData?.callType ?? "");
-  const [language, setLanguage] = useState(initialData?.language ?? "");
-  const [voice, setVoice] = useState(initialData?.voice ?? "");
-  const [prompt, setPrompt] = useState(initialData?.prompt ?? "");
-  const [model, setModel] = useState(initialData?.model ?? "");
-  const [latency, setLatency] = useState([initialData?.latency ?? 0.5]);
-  const [speed, setSpeed] = useState([initialData?.speed ?? 110]);
-  const [description, setDescription] = useState(initialData?.description ?? "");
+  const {
+    data,
+    updateField,
+    saveAgent,
+    testCall,
+    saving,
+    isDirty,
+  } = useAgentForm({
+    name: initialData?.agentName ?? '',
+    description: initialData?.description ?? '',
+    callType: initialData?.callType ?? '',
+    language: initialData?.language ?? '',
+    voice: initialData?.voice ?? '',
+    prompt: initialData?.prompt ?? '',
+    model: initialData?.model ?? '',
+    latency: initialData?.latency ?? 0.5,
+    speed: initialData?.speed ?? 110,
+    callScript: initialData?.callScript ?? '',
+    serviceDescription: initialData?.serviceDescription ?? '',
+    attachments: [],
+    tools: {
+      allowHangUp: false,
+      allowCallback: false,
+      liveTransfer: false,
+    },
+  });
 
-  // Call Script
-  const [callScript, setCallScript] = useState(initialData?.callScript ?? "");
+  // Test Call local state
+  const [testFirstName, setTestFirstName] = useState('');
+  const [testLastName, setTestLastName] = useState('');
+  const [testGender, setTestGender] = useState('');
+  const [testPhone, setTestPhone] = useState('');
+  const [testing, setTesting] = useState(false);
 
-  // Service/Product Description
-  const [serviceDescription, setServiceDescription] = useState(initialData?.serviceDescription ?? "");
+  const {
+    languages,
+    voices,
+    prompts,
+    models,
+    loading: referenceLoading,
+  } = useReferenceData();
 
-  // Reference Data
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
-  const [isDragging, setIsDragging] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const {
+    uploads,
+    uploadFile,
+    removeFile,
+    attachmentIds,
+    isUploading,
+  } = useFileUpload();
 
-  // Test Call
-  const [testFirstName, setTestFirstName] = useState("");
-  const [testLastName, setTestLastName] = useState("");
-  const [testGender, setTestGender] = useState("");
-  const [testPhone, setTestPhone] = useState("");
+  useEffect(() => {
+    if (attachmentIds.length > 0) {
+      updateField('attachments', attachmentIds);
+    }
+  }, [attachmentIds, updateField]);
+
+  const handleFiles = async (files: FileList | null) => {
+    if (!files) return;
+    await Promise.all(
+      Array.from(files).map(file => uploadFile(file))
+    );
+  };
 
   // Badge counts for required fields
-  const basicSettingsMissing = [agentName, callType, language, voice, prompt, model].filter(
+  const basicSettingsMissing = [data.name, data.callType, data.language, data.voice, data.prompt, data.model].filter(
     (v) => !v
   ).length;
 
@@ -174,26 +208,8 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
     ".xls",
   ];
 
-  const handleFiles = useCallback(
-    (files: FileList | null) => {
-      if (!files) return;
-      const newFiles: UploadedFile[] = [];
-      for (let i = 0; i < files.length; i++) {
-        const file = files[i];
-        const ext = "." + file.name.split(".").pop()?.toLowerCase();
-        if (ACCEPTED_TYPES.includes(ext)) {
-          newFiles.push({ name: file.name, size: file.size, file });
-        }
-      }
-      setUploadedFiles((prev) => [...prev, ...newFiles]);
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
-
-  const removeFile = (index: number) => {
-    setUploadedFiles((prev) => prev.filter((_, i) => i !== index));
-  };
+  const [isDragging, setIsDragging] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
@@ -218,7 +234,23 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
     <div className="flex flex-1 flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-3xl font-bold">{heading}</h1>
-        <Button>{saveLabel}</Button>
+        <Button
+          onClick={async () => {
+            try {
+              await saveAgent();
+              toast.success("Agent saved successfully!");
+            } catch (err: unknown) {
+              if (err instanceof Error) {
+                toast.error(err.message);
+              } else {
+                toast.error("Failed to save agent.");
+              }
+            }
+          }}
+          disabled={saving || isUploading || basicSettingsMissing > 0}
+        >
+          {saving ? "Saving..." : saveLabel}
+        </Button>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -239,8 +271,8 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 <Input
                   id="agent-name"
                   placeholder="e.g. Sales Assistant"
-                  value={agentName}
-                  onChange={(e) => setAgentName(e.target.value)}
+                  value={data.name}
+                  onChange={(e) => updateField('name', e.target.value)}
                 />
               </div>
 
@@ -249,8 +281,8 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 <Input
                   id="description"
                   placeholder="Describe what this agent does..."
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  value={data.description}
+                  onChange={(e) => updateField('description', e.target.value)}
                 />
               </div>
 
@@ -258,7 +290,7 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 <Label>
                   Call Type <span className="text-destructive">*</span>
                 </Label>
-                <Select value={callType} onValueChange={setCallType}>
+                <Select value={data.callType} onValueChange={(v) => updateField('callType', v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select call type" />
                   </SelectTrigger>
@@ -273,15 +305,21 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 <Label>
                   Language <span className="text-destructive">*</span>
                 </Label>
-                <Select value={language} onValueChange={setLanguage}>
+                <Select value={data.language} onValueChange={(v) => updateField('language', v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select language" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="ar">Arabic</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
+                    {referenceLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading...
+                      </SelectItem>
+                    ) : (
+                      languages.map(lang => (
+                        <SelectItem key={lang.id} value={lang.id}>
+                          {lang.name}
+                        </SelectItem>
+                      )))}
                   </SelectContent>
                 </Select>
               </div>
@@ -290,17 +328,26 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 <Label>
                   Voice <span className="text-destructive">*</span>
                 </Label>
-                <Select value={voice} onValueChange={setVoice}>
+                <Select value={data.voice} onValueChange={(v) => updateField('voice', v)} disabled={!data.language}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select voice" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="alloy">Alloy</SelectItem>
-                    <SelectItem value="echo">Echo</SelectItem>
-                    <SelectItem value="fable">Fable</SelectItem>
-                    <SelectItem value="onyx">Onyx</SelectItem>
-                    <SelectItem value="nova">Nova</SelectItem>
-                    <SelectItem value="shimmer">Shimmer</SelectItem>
+                    {referenceLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading...
+                      </SelectItem>
+                    ) : (
+                      voices
+                        .filter(v => !data.language || v.language === data.language)
+                        .map(voice => (
+                          <SelectItem key={voice.id} value={voice.id}>
+                            <div className="flex items-center gap-2">
+                              <span>{voice.name}</span>
+                              <Badge variant="secondary">{voice.tag}</Badge>
+                            </div>
+                          </SelectItem>
+                        )))}
                   </SelectContent>
                 </Select>
               </div>
@@ -309,15 +356,21 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 <Label>
                   Prompt <span className="text-destructive">*</span>
                 </Label>
-                <Select value={prompt} onValueChange={setPrompt}>
+                <Select value={data.prompt} onValueChange={(v) => updateField('prompt', v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select prompt" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="default">Default Prompt</SelectItem>
-                    <SelectItem value="sales">Sales Prompt</SelectItem>
-                    <SelectItem value="support">Support Prompt</SelectItem>
-                    <SelectItem value="custom">Custom Prompt</SelectItem>
+                    {referenceLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading...
+                      </SelectItem>
+                    ) : (
+                      prompts.map(prompt => (
+                      <SelectItem key={prompt.id} value={prompt.id}>
+                        {prompt.name}
+                      </SelectItem>
+                    )))}
                   </SelectContent>
                 </Select>
               </div>
@@ -326,24 +379,31 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 <Label>
                   Model <span className="text-destructive">*</span>
                 </Label>
-                <Select value={model} onValueChange={setModel}>
+                <Select value={data.model} onValueChange={(v) => updateField('model', v)}>
                   <SelectTrigger className="w-full">
                     <SelectValue placeholder="Select model" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="pro">Pro</SelectItem>
-                    <SelectItem value="standard">Standard</SelectItem>
-                    <SelectItem value="flex">Flex</SelectItem>
+                    {referenceLoading ? (
+                      <SelectItem value="loading" disabled>
+                        Loading...
+                      </SelectItem>
+                    ) : (
+                      models.map(model => (
+                      <SelectItem key={model.id} value={model.id}>
+                        {model.name}
+                      </SelectItem>
+                    )))}
                   </SelectContent>
                 </Select>
               </div>
 
               <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Latency ({latency[0].toFixed(1)}s)</Label>
+                  <Label>Latency ({data.latency.toFixed(1)}s)</Label>
                   <Slider
-                    value={latency}
-                    onValueChange={setLatency}
+                    value={[data.latency]}
+                    onValueChange={([v]) => updateField('latency', v)}
                     min={0.3}
                     max={1}
                     step={0.1}
@@ -355,10 +415,10 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Speed ({speed[0]}%)</Label>
+                  <Label>Speed ({data.speed}%)</Label>
                   <Slider
-                    value={speed}
-                    onValueChange={setSpeed}
+                    value={[data.speed]}
+                    onValueChange={([v]) => updateField('speed', v)}
                     min={90}
                     max={130}
                     step={1}
@@ -381,13 +441,13 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
             <div className="space-y-2">
               <Textarea
                 placeholder="Write your call script here..."
-                value={callScript}
-                onChange={(e) => setCallScript(e.target.value)}
+                value={data.callScript}
+                onChange={(e) => updateField('callScript', e.target.value)}
                 rows={6}
                 maxLength={20000}
               />
               <p className="text-xs text-muted-foreground text-right">
-                {callScript.length}/20000
+                {data.callScript.length}/20000
               </p>
             </div>
           </CollapsibleSection>
@@ -400,13 +460,13 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
             <div className="space-y-2">
               <Textarea
                 placeholder="Describe your service or product..."
-                value={serviceDescription}
-                onChange={(e) => setServiceDescription(e.target.value)}
+                value={data.serviceDescription}
+                onChange={(e) => updateField('serviceDescription', e.target.value)}
                 rows={6}
                 maxLength={20000}
               />
               <p className="text-xs text-muted-foreground text-right">
-                {serviceDescription.length}/20000
+                {data.serviceDescription.length}/20000
               </p>
             </div>
           </CollapsibleSection>
@@ -453,25 +513,25 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
               </div>
 
               {/* File list */}
-              {uploadedFiles.length > 0 ? (
+              {uploads.length > 0 ? (
                 <div className="space-y-2">
-                  {uploadedFiles.map((f, i) => (
+                  {uploads.map((u, i) => (
                     <div
                       key={i}
                       className="flex items-center justify-between rounded-md border px-3 py-2"
                     >
                       <div className="flex items-center gap-2 min-w-0">
                         <FileText className="h-4 w-4 shrink-0 text-muted-foreground" />
-                        <span className="text-sm truncate">{f.name}</span>
+                        <span className="text-sm truncate">{u.file.name}</span>
                         <span className="text-xs text-muted-foreground shrink-0">
-                          {formatFileSize(f.size)}
+                          {formatFileSize(u.file.size)}
                         </span>
                       </div>
                       <Button
                         variant="ghost"
                         size="icon"
                         className="h-7 w-7 shrink-0"
-                        onClick={() => removeFile(i)}
+                        onClick={() => removeFile(u.file)}
                       >
                         <X className="h-4 w-4" />
                       </Button>
@@ -501,7 +561,16 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                       Select if you would like to allow the agent to hang up the call
                     </FieldDescription>
                   </FieldContent>
-                  <Switch id="switch-hangup" />
+                  <Switch
+                    id="switch-hangup"
+                    checked={data.tools.allowHangUp}
+                    onCheckedChange={(v) =>
+                      updateField("tools", {
+                        ...data.tools,
+                        allowHangUp: v,
+                      })
+                    }
+                  />
                 </Field>
               </FieldLabel>
               <FieldLabel htmlFor="switch-callback">
@@ -512,7 +581,16 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                       Select if you would like to allow the agent to make callbacks
                     </FieldDescription>
                   </FieldContent>
-                  <Switch id="switch-callback" />
+                  <Switch
+                    id="switch-callback"
+                    checked={data.tools.allowCallback}
+                    onCheckedChange={(v) =>
+                      updateField("tools", {
+                        ...data.tools,
+                        allowCallback: v,
+                      })
+                    }
+                  />
                 </Field>
               </FieldLabel>
               <FieldLabel htmlFor="switch-transfer">
@@ -523,7 +601,16 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                       Select if you want to transfer the call to a human agent
                     </FieldDescription>
                   </FieldContent>
-                  <Switch id="switch-transfer" />
+                  <Switch
+                    id="switch-transfer"
+                    checked={data.tools.liveTransfer}
+                    onCheckedChange={(v) =>
+                      updateField("tools", {
+                        ...data.tools,
+                        liveTransfer: v,
+                      })
+                    }
+                  />
                 </Field>
               </FieldLabel>
             </FieldGroup>
@@ -570,7 +657,10 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
 
                   <div className="space-y-2">
                     <Label>Gender</Label>
-                    <Select value={testGender} onValueChange={setTestGender}>
+                    <Select
+                      value={testGender}
+                      onValueChange={setTestGender}
+                    >
                       <SelectTrigger className="w-full">
                         <SelectValue placeholder="Select gender" />
                       </SelectTrigger>
@@ -592,11 +682,40 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
                       placeholder="Enter phone number"
                     />
                   </div>
+                  <Button
+                    className="w-full"
+                    onClick={async () => {
+                      if (isDirty) {
+                        toast.error("Please save the agent before starting a test call.");
+                        return;
+                      }
 
-                  <Button className="w-full">
+                      try {
+                        setTesting(true);
+                        await testCall({
+                          firstName: testFirstName,
+                          lastName: testLastName,
+                          gender: testGender,
+                          phoneNumber: testPhone,
+                        });
+                        toast.success("Test call started successfully!");
+                      } catch (err: unknown) {
+                        // Narrow the unknown type safely
+                        if (err instanceof Error) {
+                          toast.error(err.message);
+                        } else {
+                          toast.error("Failed to start test call.");
+                        }
+                      } finally {
+                        setTesting(false);
+                      }
+                    }}
+                    disabled={!testPhone || saving || testing}
+                  >
                     <Phone className="mr-2 h-4 w-4" />
-                    Start Test Call
+                    {testing ? "Calling..." : "Start Test Call"}
                   </Button>
+
                 </div>
               </CardContent>
             </Card>
@@ -607,7 +726,23 @@ export function AgentForm({ mode, initialData }: AgentFormProps) {
       {/* Sticky bottom save bar */}
       <div className="sticky bottom-0 -mx-6 -mb-6 border-t bg-background px-6 py-4">
         <div className="flex justify-end">
-          <Button>{saveLabel}</Button>
+        <Button
+          onClick={async () => {
+            try {
+              await saveAgent();
+              toast.success("Agent saved successfully!");
+            } catch (err: unknown) {
+              if (err instanceof Error) {
+                toast.error(err.message);
+              } else {
+                toast.error("Failed to save agent.");
+              }
+            }
+          }}
+          disabled={saving || isUploading || basicSettingsMissing > 0}
+        >
+          {saving ? "Saving..." : saveLabel}
+        </Button>
         </div>
       </div>
     </div>
